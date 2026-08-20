@@ -1034,21 +1034,25 @@ async function startServer() {
   });
 
   app.post('/api/admin/barbers', requireAdmin, (req: Request, res: Response) => {
-    const { name, role, photoUrl, bio, specialization, services, workingDays } = req.body;
+    const { name, role, photoUrl, bio, specialization, services, workingDays, phone, rating, isActive, isAvailableToday, isOnDuty } = req.body;
     if (!name) return res.status(400).json({ error: 'Nama barber wajib diisi' });
+
+    const activeStatus = isActive !== undefined ? Boolean(isActive) : true;
+    const availableStatus = isAvailableToday !== undefined ? Boolean(isAvailableToday) : (isOnDuty !== undefined ? Boolean(isOnDuty) : true);
 
     const newBarber: Barber = {
       id: 'barber-' + Date.now(),
       name,
       role: role || 'Barber Specialist',
+      phone: phone || '',
       photoUrl: photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80',
       bio: bio || '',
       specialization: Array.isArray(specialization) ? specialization : ['Classic Haircut', 'Razor Shave'],
       services: Array.isArray(services) ? services : db.services.map((s) => s.id),
-      rating: 5.0,
+      rating: rating !== undefined ? Number(rating) : 5.0,
       totalBookings: 0,
-      isAvailableToday: true,
-      isActive: true,
+      isAvailableToday: availableStatus,
+      isActive: activeStatus,
       workingDays: workingDays || JSON.parse(JSON.stringify(INITIAL_BARBERS[0].workingDays)),
     };
 
@@ -1062,7 +1066,18 @@ async function startServer() {
     const barber = db.barbers.find((b) => b.id === id);
     if (!barber) return res.status(404).json({ error: 'Barber tidak ditemukan' });
 
-    Object.assign(barber, req.body);
+    const updates = { ...req.body };
+    if (updates.isOnDuty !== undefined && updates.isAvailableToday === undefined) {
+      updates.isAvailableToday = Boolean(updates.isOnDuty);
+    }
+    if (updates.isActive !== undefined) {
+      updates.isActive = Boolean(updates.isActive);
+    }
+    if (updates.isAvailableToday !== undefined) {
+      updates.isAvailableToday = Boolean(updates.isAvailableToday);
+    }
+
+    Object.assign(barber, updates);
     saveDatabase();
     res.json({ success: true, barber });
   });

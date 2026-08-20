@@ -11,6 +11,7 @@ import {
   PromoCode,
   DashboardStats,
 } from '../types';
+import { INITIAL_SETTINGS } from '../data/initialData';
 
 export interface ShopInfoResponse {
   brandName: string;
@@ -397,26 +398,31 @@ export async function fetchAdminData(token: string): Promise<AdminAllDataRespons
     isActive: p.isActive,
   }));
 
+  const rawSettings = settingsRes || {};
   const formattedSettings: WebsiteSettings = {
-    brandName: settingsRes.brandName,
-    tagline: settingsRes.tagline,
-    phone: settingsRes.phone,
-    whatsapp: settingsRes.whatsapp,
-    instagram: settingsRes.instagram,
-    instagramUsername: settingsRes.instagram,
-    instagramUrl: 'https://instagram.com/' + (settingsRes.instagram || '').replace('@', ''),
-    address: settingsRes.address,
-    addressDetails: settingsRes.addressDetails,
-    googleMapsEmbedUrl: settingsRes.googleMapsEmbedUrl,
-    googleMapsDirectionsUrl: settingsRes.googleMapsDirectionsUrl,
-    heroTitle: settingsRes.heroTitle,
-    heroSubtitle: settingsRes.heroSubtitle,
-    heroImageUrl: settingsRes.heroImageUrl,
-    businessHours: settingsRes.businessHours,
-    cancellationWindowHours: settingsRes.bookingRules?.cancellationWindowHours || 2,
-    slotIntervalMinutes: settingsRes.bookingRules?.slotIntervalMinutes || 30,
-    bookingRules: settingsRes.bookingRules,
-    holidays: settingsRes.holidays,
+    brandName: rawSettings.brandName || INITIAL_SETTINGS.brandName,
+    tagline: rawSettings.tagline || INITIAL_SETTINGS.tagline,
+    phone: rawSettings.phone || INITIAL_SETTINGS.phone,
+    whatsapp: rawSettings.whatsapp || INITIAL_SETTINGS.whatsapp,
+    instagram: rawSettings.instagram || INITIAL_SETTINGS.instagram,
+    instagramUsername: rawSettings.instagram || rawSettings.instagramUsername || INITIAL_SETTINGS.instagramUsername,
+    instagramUrl: 'https://instagram.com/' + (rawSettings.instagram || INITIAL_SETTINGS.instagram || '').replace('@', ''),
+    address: rawSettings.address || INITIAL_SETTINGS.address,
+    addressDetails: rawSettings.addressDetails || INITIAL_SETTINGS.addressDetails,
+    googleMapsEmbedUrl: rawSettings.googleMapsEmbedUrl || INITIAL_SETTINGS.googleMapsEmbedUrl,
+    googleMapsDirectionsUrl: rawSettings.googleMapsDirectionsUrl || INITIAL_SETTINGS.googleMapsDirectionsUrl,
+    heroTitle: rawSettings.heroTitle || INITIAL_SETTINGS.heroTitle,
+    heroSubtitle: rawSettings.heroSubtitle || INITIAL_SETTINGS.heroSubtitle,
+    heroImageUrl: rawSettings.heroImageUrl || INITIAL_SETTINGS.heroImageUrl,
+    aboutTitle: rawSettings.aboutTitle || INITIAL_SETTINGS.aboutTitle,
+    aboutText: rawSettings.aboutText || INITIAL_SETTINGS.aboutText,
+    aboutFeatures: Array.isArray(rawSettings.aboutFeatures) ? rawSettings.aboutFeatures : INITIAL_SETTINGS.aboutFeatures,
+    logoUrl: rawSettings.logoUrl || '',
+    businessHours: Array.isArray(rawSettings.businessHours) && rawSettings.businessHours.length > 0 ? rawSettings.businessHours : INITIAL_SETTINGS.businessHours,
+    cancellationWindowHours: rawSettings.bookingRules?.cancellationWindowHours || rawSettings.cancellationWindowHours || 2,
+    slotIntervalMinutes: rawSettings.bookingRules?.slotIntervalMinutes || rawSettings.slotIntervalMinutes || 30,
+    bookingRules: rawSettings.bookingRules || INITIAL_SETTINGS.bookingRules,
+    holidays: Array.isArray(rawSettings.holidays) ? rawSettings.holidays : [],
   };
 
   return {

@@ -486,7 +486,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <AdminReviews reviews={reviews} onDeleteReview={handleDeleteReview} />
           )}
 
-          {activeTab === 'settings' && settings && (
+          {activeTab === 'settings' && (
             <AdminSettings
               settings={settings}
               onSaveSettings={handleSaveSettings}
