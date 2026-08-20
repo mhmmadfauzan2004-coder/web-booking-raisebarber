@@ -8,12 +8,8 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onCancel }) => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState(() => {
-    return typeof window !== 'undefined'
-      ? localStorage.getItem('raise_admin_password') || 'raiseadmin2025'
-      : 'raiseadmin2025';
-  });
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,13 +93,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onCancel }) =
               />
               <Lock className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
             </div>
-          </div>
-
-          <div className="p-3 rounded-sm bg-[#0D0D0D] border border-white/10 text-[11px] text-gray-400">
-            <span className="text-white font-bold">Default Demo Credentials:</span>
-            <br />
-            Username: <code className="text-white font-mono font-bold">admin</code> &bull; Password:{' '}
-            <code className="text-white font-mono font-bold">raiseadmin2025</code>
           </div>
 
           <button
