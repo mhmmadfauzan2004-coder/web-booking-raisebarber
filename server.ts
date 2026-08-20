@@ -729,6 +729,17 @@ async function startServer() {
     res.status(401).json({ error: 'Username atau password salah' });
   });
 
+  app.post('/api/auth/logout', (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1]?.trim();
+      if (token) {
+        activeAdminTokens.delete(token);
+      }
+    }
+    res.json({ success: true, message: 'Berhasil logout. Sesi telah diakhiri.' });
+  });
+
   app.get('/api/auth/me', requireAdmin, (req: Request, res: Response) => {
     res.json({
       user: {

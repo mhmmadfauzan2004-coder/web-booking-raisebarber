@@ -173,19 +173,49 @@ export async function submitReview(id: string, rating: number, comment: string, 
 // Admin API Calls & Aggregators
 // ----------------------------------------------------
 
-async function adminRequest(url: string, token: string, options: RequestInit = {}) {
-  const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('raise_admin_token') || 'raise_admin_secret_token_default' : 'raise_admin_secret_token_default');
+export function getStoredAdminToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  // Clear any legacy localStorage token
+  localStorage.removeItem('raise_admin_token');
+  return sessionStorage.getItem('raise_admin_token');
+}
+
+export function setStoredAdminToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('raise_admin_token');
+  sessionStorage.setItem('raise_admin_token', token);
+}
+
+export function clearStoredAdminSession(): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem('raise_admin_token');
+  sessionStorage.clear();
+  localStorage.removeItem('raise_admin_token');
+  // Clear any cookie auth references
+  try {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i];
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+      document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function adminRequest(url: string, token?: string, options: RequestInit = {}) {
+  const authToken = token || getStoredAdminToken() || '';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...(options.headers as Record<string, string>),
   };
 
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('raise_admin_token');
-    }
+    clearStoredAdminSession();
     throw new Error('401: Sesi admin berakhir. Silakan login kembali.');
   }
 
@@ -194,6 +224,25 @@ async function adminRequest(url: string, token: string, options: RequestInit = {
     throw new Error(data.error || 'Terjadi kesalahan sistem');
   }
   return data;
+}
+
+export async function adminLogout(token?: string): Promise<void> {
+  const authToken = token || getStoredAdminToken();
+  try {
+    if (authToken) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+    }
+  } catch {
+    // ignore network errors on logout
+  } finally {
+    clearStoredAdminSession();
+  }
 }
 
 export async function adminLogin(
@@ -216,6 +265,7 @@ export async function adminLogin(
 
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.token) {
+      setStoredAdminToken(data.token);
       return data;
     }
   } catch {
@@ -228,8 +278,10 @@ export async function adminLogin(
   const isValidPass = password === customPassword || password === 'raiseadmin2025';
 
   if (isValidUser && isValidPass) {
+    const token = 'raise_admin_secret_token_' + Date.now();
+    setStoredAdminToken(token);
     return {
-      token: 'raise_admin_secret_token_default',
+      token,
       user: {
         email: 'admin@raisebarbershop.com',
         name: 'Admin Raise Barbershop',

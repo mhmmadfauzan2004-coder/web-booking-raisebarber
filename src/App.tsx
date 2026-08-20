@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   WebsiteSettings,
   Service,
@@ -8,7 +8,13 @@ import {
   Review,
   Booking,
 } from './types';
-import { fetchShopInfo } from './api/client';
+import {
+  fetchShopInfo,
+  getStoredAdminToken,
+  setStoredAdminToken,
+  clearStoredAdminSession,
+  adminLogout,
+} from './api/client';
 
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -31,11 +37,23 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
-  // App View Mode: 'customer' | 'admin'
-  const [viewMode, setViewMode] = useState<'customer' | 'admin'>('customer');
-  const [adminToken, setAdminToken] = useState<string | null>(() => {
-    return localStorage.getItem('raise_admin_token');
+  // App View Mode: 'customer' | 'admin-login' | 'admin-dashboard'
+  const [currentView, setCurrentView] = useState<'customer' | 'admin-login' | 'admin-dashboard'>(() => {
+    if (typeof window === 'undefined') return 'customer';
+    const path = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+    const token = getStoredAdminToken();
+
+    if (path === '/login') {
+      return 'admin-login';
+    }
+    if (path.startsWith('/admin') || params.get('admin') === '1') {
+      return token ? 'admin-dashboard' : 'admin-login';
+    }
+    return 'customer';
   });
+
+  const [adminToken, setAdminToken] = useState<string | null>(() => getStoredAdminToken());
 
   // Shop Public Data
   const [settings, setSettings] = useState<WebsiteSettings | undefined>(undefined);
@@ -58,7 +76,7 @@ export default function App() {
   const [preselectedStartTime, setPreselectedStartTime] = useState<string | undefined>(undefined);
 
   // Load shop info from API
-  const loadPublicData = async () => {
+  const loadPublicData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetchShopInfo();
@@ -73,34 +91,107 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Route Synchronization & Browser History Management
   useEffect(() => {
     loadPublicData();
 
-    // Check query params for deep-link
+    // Check initial query params for booking triggers
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('admin') === '1') {
-      setViewMode('admin');
-    }
     if (urlParams.get('book') === '1') {
       setBookingModalOpen(true);
     }
     if (urlParams.get('lookup') === '1') {
       setLookupModalOpen(true);
     }
-  }, []);
+
+    // Sync initial route state and protect /admin
+    const path = window.location.pathname;
+    const token = getStoredAdminToken();
+    if (path.startsWith('/admin') || urlParams.get('admin') === '1') {
+      if (!token) {
+        // Route protection: unauthorized access replaced with /login
+        window.history.replaceState({ route: 'login' }, '', '/login');
+        setCurrentView('admin-login');
+        setAdminToken(null);
+      } else {
+        setCurrentView('admin-dashboard');
+        setAdminToken(token);
+      }
+    } else if (path === '/login') {
+      setCurrentView('admin-login');
+    }
+
+    // Listen to browser Back / Forward buttons (popstate)
+    const handlePopState = () => {
+      const currentPath = window.location.pathname;
+      const currentSearch = window.location.search;
+      const activeToken = getStoredAdminToken();
+
+      if (currentPath.startsWith('/admin') || currentSearch.includes('admin=1')) {
+        if (!activeToken) {
+          // Route Protection: Prevent unauthorized backward navigation into admin
+          window.history.replaceState({ route: 'login' }, '', '/login');
+          setCurrentView('admin-login');
+          setAdminToken(null);
+        } else {
+          setAdminToken(activeToken);
+          setCurrentView('admin-dashboard');
+        }
+      } else if (currentPath === '/login') {
+        setCurrentView('admin-login');
+      } else {
+        setCurrentView('customer');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [loadPublicData]);
 
   // Admin login handler
   const handleAdminLoginSuccess = (token: string) => {
-    localStorage.setItem('raise_admin_token', token);
+    setStoredAdminToken(token);
     setAdminToken(token);
+    setCurrentView('admin-dashboard');
+    window.history.pushState({ route: 'admin' }, '', '/admin');
   };
 
-  const handleAdminLogout = () => {
-    localStorage.removeItem('raise_admin_token');
-    setAdminToken(null);
-    setViewMode('customer');
+  // Admin logout handler - Clears sessionStorage, cookies, resets state & forces redirect to /login
+  const handleAdminLogout = async () => {
+    try {
+      await adminLogout(adminToken || undefined);
+    } catch {
+      // ignore
+    } finally {
+      clearStoredAdminSession();
+      setAdminToken(null);
+      setCurrentView('admin-login');
+      // Replace state to ensure browser "Back" button cannot return to dashboard
+      window.history.replaceState({ route: 'login' }, '', '/login');
+    }
+  };
+
+  // Navigate to Admin Area
+  const handleNavigateAdmin = () => {
+    const token = getStoredAdminToken();
+    if (token) {
+      setAdminToken(token);
+      setCurrentView('admin-dashboard');
+      window.history.pushState({ route: 'admin' }, '', '/admin');
+    } else {
+      setAdminToken(null);
+      setCurrentView('admin-login');
+      window.history.pushState({ route: 'login' }, '', '/login');
+    }
+  };
+
+  // Navigate back to Public Customer Website
+  const handleNavigateCustomer = () => {
+    setCurrentView('customer');
+    window.history.pushState({ route: 'customer' }, '', '/');
+    loadPublicData();
   };
 
   // Launchers for Booking Modal with context
@@ -134,13 +225,28 @@ export default function App() {
     setConfirmedBooking(booking);
   };
 
-  // If Admin View Mode is Active
-  if (viewMode === 'admin') {
+  // ==========================================
+  // ROUTE RENDERING
+  // ==========================================
+
+  // 1. Admin Login Form View (/login or unauthorized /admin)
+  if (currentView === 'admin-login') {
+    return (
+      <AdminLogin
+        onSuccess={handleAdminLoginSuccess}
+        onCancel={handleNavigateCustomer}
+      />
+    );
+  }
+
+  // 2. Protected Admin Dashboard View (/admin with valid session)
+  if (currentView === 'admin-dashboard') {
     if (!adminToken) {
+      // Extra safety check - enforce route protection
       return (
         <AdminLogin
           onSuccess={handleAdminLoginSuccess}
-          onCancel={() => setViewMode('customer')}
+          onCancel={handleNavigateCustomer}
         />
       );
     }
@@ -149,15 +255,12 @@ export default function App() {
       <AdminDashboard
         token={adminToken}
         onLogout={handleAdminLogout}
-        onViewWebsite={() => {
-          setViewMode('customer');
-          loadPublicData();
-        }}
+        onViewWebsite={handleNavigateCustomer}
       />
     );
   }
 
-  // Customer Facing View
+  // 3. Customer Facing View
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-amber-500 selection:text-zinc-950">
       {/* Navbar */}
@@ -165,7 +268,7 @@ export default function App() {
         settings={settings}
         onOpenBooking={() => handleOpenBooking()}
         onOpenLookup={() => setLookupModalOpen(true)}
-        onNavigateAdmin={() => setViewMode('admin')}
+        onNavigateAdmin={handleNavigateAdmin}
       />
 
       <main>
@@ -223,7 +326,7 @@ export default function App() {
         settings={settings}
         onOpenBooking={() => handleOpenBooking()}
         onOpenLookup={() => setLookupModalOpen(true)}
-        onNavigateAdmin={() => setViewMode('admin')}
+        onNavigateAdmin={handleNavigateAdmin}
       />
 
       {/* Sticky Bottom Navigation on Mobile */}
