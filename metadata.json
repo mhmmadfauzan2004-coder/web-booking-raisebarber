@@ -1,0 +1,6 @@
+{
+  "name": "RAISE BARBERSHOP DUMAI",
+  "description": "Aplikasi Web Booking & Sistem Manajemen Barbershop Profesional RAISE BARBERSHOP DUMAI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
